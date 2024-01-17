@@ -140,7 +140,10 @@ class UrlScraper:
                 if bool(self.find_matching_words(text=" ".join(a_tag['class']), subwords=self.url_clue_list)):
                     if "href" in a_tag.attrs:
                         valid_anchor_tags.append(a_tag['href'])
-            elif self.check_parent_tags(a_tag):
+                # elif self.check_parent_tags(a_tag):
+                #     if "href" in a_tag.attrs:
+                #         valid_anchor_tags.append(a_tag['href'])
+            if self.check_parent_tags(a_tag):
                 if "href" in a_tag.attrs:
                     valid_anchor_tags.append(a_tag['href'])
             else:
@@ -165,7 +168,7 @@ class UrlScraper:
     def crawl_article_urls(self):
         article_divs = self.find_articles(html_element="article")
         print(f"Found {len(article_divs)} articles.")
-        return list(set(chain(*[self.extract_urls_from_anchor(html_element=article) for article in article_divs])))
+        return list(set(chain(*[self.extract_urls_from_anchor(html_element=article) for article in article_divs]))) #TODO: incele bussinessinsider duplice news-url çekiyor.
 
     def crawler_build(self):
         extracted_urls = self.crawl_article_urls()
@@ -194,22 +197,26 @@ class UrlScraper:
 if __name__ == '__main__':
 
     # url = "https://www.navalnews.com/category/naval-news/page/2/" #done, 10 haber
-    #url = "https://www.navytimes.com/" #done, 51 haber
+    # url = "https://www.navytimes.com/" #done, 51 haber
     # url = "https://www.navy.mil/Press-Office/" #text-threshold dene
     # url = "https://www.centcom.mil/MEDIA/NEWS-ARTICLES/" #done
     # url = "https://www.dailysabah.com/war-on-terror" # sıkıntı, # ve cookies urllerini discard et.
     # url = "https://www.military.com/navy" #done, head çıkarıldı
     url = "https://www.businessinsider.com/news" #done, 51
+    # url = "https://indianexpress.com/"
+    # url = "https://www.voanews.com/a/ships-aircraft-search-for-missing-navy-seals-after-mission-to-seize-iranian-missile-parts/7440990.html"
+    # url = "https://www.defensenews.com/naval/"
+    # url = "https://www.navaltoday.com/" #done, 44
     url_scraper_obj = UrlScraper(source_url=url)
-    # urls = url_scraper_obj.crawler_build()
-    # print(len(urls))
-    # print(urls)
+    urls = url_scraper_obj.crawler_build()
+    print(len(urls))
+    print(urls)
 
 
     # Example usage:
 
-    text = "popular-title-link headline-bold"
-    subwords_list = ["sample", "title", "article"]
-
-    result = url_scraper_obj.find_matching_words(text, url_scraper_obj.url_clue_list)
-    print(result)
+    # text = "popular-title-link headline-bold"
+    # subwords_list = ["sample", "title", "article"]
+    #
+    # result = url_scraper_obj.find_matching_words(text, url_scraper_obj.url_clue_list)
+    # print(result)
