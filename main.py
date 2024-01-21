@@ -58,14 +58,19 @@ class UrlScraper:
             chrome_options = webdriver.ChromeOptions()
             chrome_options.add_experimental_option("detach", True)
             chrome_options.add_argument("--start-maximized")
-            chrome_options.add_argument('--headless')
+            # chrome_options.add_argument('--headless')
             driver = webdriver.Chrome(options=chrome_options)
-            driver.get(url_)
+            driver.get("https://stackoverflow.com/questions/28431765/open-web-in-new-tab-selenium-python")
 
             print(self.selenium_wait_timeout)
-            WebDriverWait(driver, self.selenium_wait_timeout).until(EC.presence_of_element_located((By.TAG_NAME, 'a')))
+            driver.switch_to.new_window() #new-tab options
+            driver.get(url_) #new-tab options
 
-        #    driver.switch_to.new_window()
+
+            WebDriverWait(driver, self.selenium_wait_timeout).until(EC.presence_of_element_located((By.TAG_NAME, 'a')))
+            # driver.window_handles[1]
+            driver.close() #new-tab options
+            time.sleep(3) #new-tab options
             html_code = driver.page_source
             driver.quit()
 
