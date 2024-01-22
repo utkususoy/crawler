@@ -10,6 +10,7 @@ import string
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
+from xml.etree import ElementTree as ET
 
 class UrlScraper:
     def __init__(self, source_url, ):
@@ -18,7 +19,7 @@ class UrlScraper:
         self.search_parent_element_threshold = 3
         self.search_child_element_threshold = 2
         self.min_text_length = 3
-        self.url_indicator_list = ["news", "content", "title", "post", "article", "text", "story"]  # , "headline", "heading"
+        self.url_indicator_list = ["news", "content", "title", "post", "article", "story"]  # , "headline", "heading", "text"
         self.non_url_indicator_list = ["privacy", "policy", "cookie", "pay"]
         self.non_article_url_endpoints = ["#", "/", "privacy-policy/"]
         self.html_content = self.get_html_with_selenium(url_=self.source_url)
@@ -58,19 +59,19 @@ class UrlScraper:
             chrome_options = webdriver.ChromeOptions()
             chrome_options.add_experimental_option("detach", True)
             chrome_options.add_argument("--start-maximized")
-            # chrome_options.add_argument('--headless')
+            chrome_options.add_argument('--headless')
             driver = webdriver.Chrome(options=chrome_options)
-            driver.get("https://stackoverflow.com/questions/28431765/open-web-in-new-tab-selenium-python")
+            #driver.get("https://stackoverflow.com/questions/28431765/open-web-in-new-tab-selenium-python")
 
-            print(self.selenium_wait_timeout)
-            driver.switch_to.new_window() #new-tab options
+            # print(self.selenium_wait_timeout)
+            # driver.switch_to.new_window() #new-tab options
             driver.get(url_) #new-tab options
 
 
             WebDriverWait(driver, self.selenium_wait_timeout).until(EC.presence_of_element_located((By.TAG_NAME, 'a')))
             # driver.window_handles[1]
-            driver.close() #new-tab options
-            time.sleep(3) #new-tab options
+            # driver.close() #new-tab options
+            # time.sleep(3) #new-tab options
             html_code = driver.page_source
             driver.quit()
 
@@ -121,34 +122,6 @@ class UrlScraper:
 
         return article_elements
 
-    # def is_media_url(self, url):
-    #     media_extensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp',
-    #                         'mp4', 'webm', 'avi', 'mkv',
-    #                         'mp3', 'wav', 'flac', 'ogg']
-    #
-    #     pattern = re.compile(r'\.({})$'.format('|'.join(map(re.escape, media_extensions))), flags=re.IGNORECASE)
-    #     return bool(pattern.search(url))
-    #
-    # def find_all_urls(self, base_url):
-    #     # Send a GET request to the URL
-    #     response = requests.get(base_url)
-    #
-    #     # Check if the request was successful (status code 200)
-    #     if response.status_code == 200:
-    #         # Parse the HTML content of the page
-    #         soup = BeautifulSoup(response.content, 'html.parser')
-    #
-    #         # Find all anchor tags (a) that contain href attributes
-    #         all_links = soup.find_all('a', href=True)
-    #
-    #         # Extract and print the absolute URLs using urljoin
-    #         for link in all_links:
-    #             absolute_url = urljoin(base_url, link['href'])
-    #             # print(absolute_url)
-    #
-    #     else:
-    #         print(f"Failed to retrieve the page. Status code: {response.status_code}")
-
     def remove_punctuation(self, text):
         translator = str.maketrans('', '', string.punctuation)
         text_without_punctuation = text.translate(translator)
@@ -163,22 +136,30 @@ class UrlScraper:
 
         return urls
 
-    def check_hyperlink_texts(self, hyperlink_tag, ):
-        text_of_hyperlink = hyperlink_tag.text.strip()
+    def check_hyperlink_texts(self, hyperlink_tag):
+        a_tag_text = ''.join(hyperlink_tag.find_all(string=True, recursive=False))
+        text_of_hyperlink = a_tag_text.strip()
         pure_text_of_hyperlink = (text_of_hyperlink and self.remove_punctuation(
             text=text_of_hyperlink)) or ''
         # text control if exist
+        if hyperlink_tag['href'] == "https://www.aa.com.tr/en/world/uk-us-announce-sanctions-to-disrupt-financial-networks-of-hamas/3115721":
+            print("aaaa")
         if pure_text_of_hyperlink:
             if len(pure_text_of_hyperlink.split()) > self.min_text_length: # alternatif olarak url-endpatinde keyword search yap.
                 if hyperlink_tag['href'] in self.rejected_urls: self.rejected_urls.remove(hyperlink_tag['href'])
                 return True
             else:
                 # self.rejected_urls.add(hyperlink_tag)
-                if hyperlink_tag['href'] not in self.accepted_urls: self.rejected_urls.add(hyperlink_tag['href'])
+            #    if hyperlink_tag['href'] not in self.accepted_urls: self.rejected_urls.add(hyperlink_tag['href'])
+
+                # if hyperlink_tag['href'] in self.accepted_urls: self.accepted_urls.remove(hyperlink_tag['href'])
+                self.rejected_urls.add(hyperlink_tag['href'])
                 return False
         else:
-            if hyperlink_tag['href'] in self.rejected_urls: self.rejected_urls.remove(hyperlink_tag['href'])
-            return True
+            #if hyperlink_tag['href'] in self.rejected_urls: self.rejected_urls.remove(hyperlink_tag['href'])
+            # return True
+            # Child textine bak.
+            return False
 
     def url_formatter(self, article_url):
         if 'http' in article_url:
@@ -235,12 +216,18 @@ class UrlScraper:
 
         for hyperlink_tag in unique_hyperlink_tags:
             # hyperlink element attribute searching
+
+            if hyperlink_tag['href'] == "https://www.aa.com.tr/en/energy":
+                print("found url")
             if self.html_element_attribute_searching(html_tag=hyperlink_tag, caller='hyperlink'):
                 hyperlink_tag['href'] not in self.non_article_url_endpoints and self.accepted_urls.add(self.url_formatter(article_url=hyperlink_tag['href']))
                 #self.accepted_urls.add(hyperlink_tag['href'])
             if self.check_parent_tags(hyperlink_tag=hyperlink_tag):
                 (hyperlink_tag['href'] not in self.non_article_url_endpoints) and (hyperlink_tag['href'] not in self.rejected_urls) and self.accepted_urls.add(self.url_formatter(article_url=hyperlink_tag['href']))
                 #(hyperlink_tag['href'] not in self.rejected_urls) and self.accepted_urls.add(hyperlink_tag['href'])
+            if self.check_hyperlink_texts(hyperlink_tag=hyperlink_tag):
+                (hyperlink_tag['href'] not in self.non_article_url_endpoints) and (hyperlink_tag['href'] not in self.rejected_urls) and self.accepted_urls.add(self.url_formatter(article_url=hyperlink_tag['href']))
+
             # else:
             #     print("<a/> tag does not include any 'class' or 'title' or parent attribute.")
         return self.accepted_urls
@@ -268,6 +255,19 @@ class UrlScraper:
         self.crawl_article_urls()
         self.extract_urls_from_anchor(html_element=self.soup_obj)
 
+    def get_sitemap_urls(self, sitemap_url):
+        response = requests.get(sitemap_url)
+        if response.status_code == 200:
+            root = ET.fromstring(response.content)
+            return [url.text for url in root.findall(".//{http://www.sitemaps.org/schemas/sitemap/0.9}loc")]
+        else:
+            print(f"Failed to fetch sitemap from {sitemap_url}")
+            return []
+
+    def crawl_website(self, urls):
+        for url in urls:
+            response = requests.get(url)
+
 #
 #1) *Find <article/>*
 # <article> exist:
@@ -289,21 +289,28 @@ class UrlScraper:
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
 
-    url = "https://www.navalnews.com/category/naval-news/page/2/" #done, 19 haber recall+
-    # url = "https://www.navalnews.com/"
-    # url = "https://www.navytimes.com/" #done recall+
+    #url = "https://www.navalnews.com/category/naval-news/page/2/" #done, 19 haber recall++
+    url = "https://www.navalnews.com/" #done 20 ++
+    url = "https://www.navytimes.com/" #done 68 ++
     # url = "https://www.navytimes.com/news/pentagon-congress/" #incele
     # url = "https://www.navy.mil/Press-Office/" #
-    # url = "https://www.centcom.mil/MEDIA/NEWS-ARTICLES/" #done recall oriented. +
+    # url = "https://www.centcom.mil/MEDIA/NEWS-ARTICLES/" #done +
     # url = "https://www.centcom.mil/" #done recall oriented. +
     # url = "https://www.dailysabah.com/war-on-terror" # sıkıntı, # ve cookies urllerini discard et.
     # url = "https://www.military.com/navy" #done, head çıkarıldı
-    #url = "https://www.businessinsider.com/news" #done, 50 +
-    #url = "https://indianexpress.com/"#done recall+
+    #url = "https://www.businessinsider.com/news" #done, 65 ++
+    # url = "https://indianexpress.com/"#done recall+
     #url = "https://www.voanews.com/a/ships-aircraft-search-for-missing-navy-seals-after-mission-to-seize-iranian-missile-parts/7440990.html" #done recall+
     # url = "https://www.defensenews.com/naval/" #done, recall+
-    url = "https://www.defensenews.com/"
+    # url = "https://www.defensenews.com/"
     #url = "https://www.navaltoday.com/" #done, 44 recall+
+    # url = "https://www.miragenews.com/" #54 +
+    # url = "https://www.hurriyetdailynews.com/" #69 +
+    # url = "https://www.al-monitor.com/" #59 ++
+    # url = "https://www.shephardmedia.com/news/naval-warfare/turkish-navy-looks-to-advance-maritime-power-with-2024-fleet-expansion/" #6 news 18 found ++
+    # url = "https://www.shephardmedia.com/" #3 news 9 found ++
+    url = "https://www.aa.com.tr/en/turkiye/turkiye-hosting-eastern-mediterranean-2023-invitation-naval-exercise/3058764" # news url-indicator dan çıkarıldı
+
 
 
 
@@ -315,6 +322,9 @@ if __name__ == '__main__':
     # print(len(url_scraper_obj._url_list_by_article_tag))
     # print(url_scraper_obj._url_list_a_tag_attributes)
     # print(len(url_scraper_obj._url_list_a_tag_attributes))
+    # sitemap_url = "https://www.eurasiantimes.com/sitemap.xml"
+    # urls = url_scraper_obj.get_sitemap_urls(sitemap_url)
+    # print(urls)
     print(url_scraper_obj.rejected_urls)
     print("accepted urls:")
     print(url_scraper_obj.accepted_urls)
