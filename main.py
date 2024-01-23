@@ -142,8 +142,8 @@ class UrlScraper:
         pure_text_of_hyperlink = (text_of_hyperlink and self.remove_punctuation(
             text=text_of_hyperlink)) or ''
         # text control if exist
-        if hyperlink_tag['href'] == "https://www.aa.com.tr/en/world/uk-us-announce-sanctions-to-disrupt-financial-networks-of-hamas/3115721":
-            print("aaaa")
+        # if hyperlink_tag['href'] == "https://www.aa.com.tr/en/world/uk-us-announce-sanctions-to-disrupt-financial-networks-of-hamas/3115721":
+        #     print("aaaa")
         if pure_text_of_hyperlink:
             if len(pure_text_of_hyperlink.split()) > self.min_text_length: # alternatif olarak url-endpatinde keyword search yap.
                 if hyperlink_tag['href'] in self.rejected_urls: self.rejected_urls.remove(hyperlink_tag['href'])
@@ -157,9 +157,9 @@ class UrlScraper:
                 return False
         else:
             #if hyperlink_tag['href'] in self.rejected_urls: self.rejected_urls.remove(hyperlink_tag['href'])
-            # return True
+            return True
             # Child textine bak.
-            return False
+            ##return False #TODO: kaldır.
 
     def url_formatter(self, article_url):
         if 'http' in article_url:
@@ -264,9 +264,91 @@ class UrlScraper:
             print(f"Failed to fetch sitemap from {sitemap_url}")
             return []
 
+    #TODO: media url'lerini sil.
+    def html_structural_pattern_search(self):
+
+        html_structural_patterns = []
+
+
+        parent_dive_threshold = 3
+
+        extracted_tags = [a_tag for a_tag in self.soup_obj.find_all('a')]
+        unique_hyperlink_tags = self.get_unique_hyperlink_tags(hyperlik_tags=extracted_tags)
+        print(len(unique_hyperlink_tags))
+
+
+        for hyper_link_tag in unique_hyperlink_tags:
+            if hyper_link_tag['href'] == "/news/your-military/2024/01/23/pentagon-can-boost-pay-for-separated-families-to-400-but-hasnt/":
+                print("sssss")
+            article_html_structure = {
+                "vote": 1,
+                "element_order": [],
+                "hyperlink_tags": [],
+                "urls": []
+            }
+            element_order = []
+            html_element = hyper_link_tag
+            for i in range(0, 3):
+                element_order.append(self.html_name_class_mapper(html_element.name))
+                html_element = html_element.find_parent()
+            article_html_structure['element_order'] = element_order
+            article_html_structure['hyperlink_tags'].append(hyper_link_tag)
+            article_html_structure['urls'].append(hyper_link_tag['href'])
+            self.check_hyperlink_texts(hyperlink_tag=hyper_link_tag) and self.process_dicts(html_structural_patterns=html_structural_patterns, new_pattern=article_html_structure)
+
+        # print(html_structural_patterns)
+        print("\n**********************\n")
+        max_voted_dict = max(html_structural_patterns, key=lambda x: x["vote"])
+        print(list(set(max_voted_dict['urls'])))
+        print(len(list(set(max_voted_dict['urls']))))
+        print((max_voted_dict['element_order']))
+        print("\n************\n")
+        for i in html_structural_patterns:
+            print(i['vote'])
+            print(i['element_order'])
+            print(i['urls'])
+            print("\n*****\n")
+
+
+    aaa = {
+        "vote": 0,
+        "element_order": [],
+        "hyperlink_tags": [],
+        "urls": []
+    }
+
+    def process_dicts(self, html_structural_patterns, new_pattern):
+        for html_pattern in html_structural_patterns:
+            if html_pattern["element_order"] == new_pattern["element_order"] and new_pattern["element_order"] != ["link", "list", "list"]:
+                html_pattern["vote"] += 1
+                html_pattern["hyperlink_tags"].append(new_pattern['hyperlink_tags'][0])
+                html_pattern["urls"].append(new_pattern['urls'][0])
+                break
+        html_structural_patterns.append(new_pattern)
+
+    def html_name_class_mapper(self, html_element_name):
+        html_classes = {
+            "heading": ["h1", "h2", "h3", "h4", "h5", "h6"],
+            "text": ["p", "br", "hr", "span", "b"],
+            "list": ["ul", "ol", "li", "dl", "dt", "dd"],
+            "link": ["a", "link"],
+            "meta": ["head", "meta"],
+            "table": ["table", "tr", "td"],
+            "media": ["img", "audio", "video"],
+            "form": ["form", "input", "button", "label", "select", "textarea"],
+            "container": ["div", "header", "footer", "nav", "main", "article", "section", "aside", "figure",
+                          "figcaption"]
+        }
+        for html_class, elements in html_classes.items():
+            if html_element_name in elements: return html_class
+        return "unknown"
+
     def crawl_website(self, urls):
         for url in urls:
             response = requests.get(url)
+
+
+
 
 #
 #1) *Find <article/>*
@@ -289,27 +371,28 @@ class UrlScraper:
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
 
-    #url = "https://www.navalnews.com/category/naval-news/page/2/" #done, 19 haber recall++
+    url = "https://www.navalnews.com/category/naval-news/page/2/" #done, 19 haber recall++
     url = "https://www.navalnews.com/" #done 20 ++
     url = "https://www.navytimes.com/" #done 68 ++
-    # url = "https://www.navytimes.com/news/pentagon-congress/" #incele
+    url = "https://www.navytimes.com/news/pentagon-congress/" #incele
     # url = "https://www.navy.mil/Press-Office/" #
-    # url = "https://www.centcom.mil/MEDIA/NEWS-ARTICLES/" #done +
-    # url = "https://www.centcom.mil/" #done recall oriented. +
-    # url = "https://www.dailysabah.com/war-on-terror" # sıkıntı, # ve cookies urllerini discard et.
-    # url = "https://www.military.com/navy" #done, head çıkarıldı
+    url = "https://www.navy.mil/Press-Office/Press-Releases/display-pressreleases/Article/3652564/secnav-del-toro-meets-with-key-leaders-during-travel-through-europe/"
+    url = "https://www.centcom.mil/MEDIA/NEWS-ARTICLES/" #done +
+    url = "https://www.centcom.mil/" #done recall oriented. +
+    url = "https://www.dailysabah.com/war-on-terror" # sıkıntı, # ve cookies urllerini discard et.
+    url = "https://www.military.com/navy" #done, head çıkarıldı
     #url = "https://www.businessinsider.com/news" #done, 65 ++
     # url = "https://indianexpress.com/"#done recall+
     #url = "https://www.voanews.com/a/ships-aircraft-search-for-missing-navy-seals-after-mission-to-seize-iranian-missile-parts/7440990.html" #done recall+
     # url = "https://www.defensenews.com/naval/" #done, recall+
     # url = "https://www.defensenews.com/"
-    #url = "https://www.navaltoday.com/" #done, 44 recall+
+    url = "https://www.navaltoday.com/" #done, 44 recall+
     # url = "https://www.miragenews.com/" #54 +
     # url = "https://www.hurriyetdailynews.com/" #69 +
     # url = "https://www.al-monitor.com/" #59 ++
     # url = "https://www.shephardmedia.com/news/naval-warfare/turkish-navy-looks-to-advance-maritime-power-with-2024-fleet-expansion/" #6 news 18 found ++
     # url = "https://www.shephardmedia.com/" #3 news 9 found ++
-    url = "https://www.aa.com.tr/en/turkiye/turkiye-hosting-eastern-mediterranean-2023-invitation-naval-exercise/3058764" # news url-indicator dan çıkarıldı
+    #url = "https://www.aa.com.tr/en/turkiye/turkiye-hosting-eastern-mediterranean-2023-invitation-naval-exercise/3058764" # news url-indicator dan çıkarıldı
 
 
 
@@ -317,7 +400,8 @@ if __name__ == '__main__':
 
 
     url_scraper_obj = UrlScraper(source_url=url)
-    url_scraper_obj.crawler_build()
+    # url_scraper_obj.crawler_build()
+    url_scraper_obj.html_structural_pattern_search()
     # print(url_scraper_obj._url_list_by_article_tag)
     # print(len(url_scraper_obj._url_list_by_article_tag))
     # print(url_scraper_obj._url_list_a_tag_attributes)
@@ -329,6 +413,8 @@ if __name__ == '__main__':
     print("accepted urls:")
     print(url_scraper_obj.accepted_urls)
     print(len(url_scraper_obj.accepted_urls))
+
+
 
 
 
