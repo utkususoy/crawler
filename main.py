@@ -17,13 +17,15 @@ class UrlScraper:
         self.source_url = source_url
         self.selenium_wait_timeout = 10
         self.search_parent_element_threshold = 3
-        self.search_child_element_threshold = 2
+        self.search_child_element_threshold = 3
         self.min_text_length = 3
         self.url_indicator_list = ["news", "content", "title", "post", "article", "story"]  # , "headline", "heading", "text"
-        self.non_url_indicator_list = ["privacy", "policy", "cookie", "pay"]
+        self.non_url_indicator_list = ["privacy", "policy", "cookie", "pay", "ad", "advertise"]
         self.non_article_url_endpoints = ["#", "/", "privacy-policy/"]
+        self.redundant_html_parts = ["header", "footer", "head", "img", "figure"]
+        self.html_body = None
         self.html_content = self.get_html_with_selenium(url_=self.source_url)
-        self.soup_obj = BeautifulSoup(self.html_content, 'html5lib')
+        self.soup_obj = self.purify_redundant_html_parts()
         self.anchor_tags = self.soup_obj.find_all('a')
         self.parsed_source_url = self.parse_url(news_url=self.source_url)
         self.extend_non_article_url_endpoints(urls=self.non_article_url_endpoints.copy())
@@ -136,11 +138,13 @@ class UrlScraper:
 
         return urls
 
+    #TODO: punc disable edildi kontrol et. farklarına bak not et
     def check_hyperlink_texts(self, hyperlink_tag):
         a_tag_text = ''.join(hyperlink_tag.find_all(string=True, recursive=False))
         text_of_hyperlink = a_tag_text.strip()
-        pure_text_of_hyperlink = (text_of_hyperlink and self.remove_punctuation(
-            text=text_of_hyperlink)) or ''
+        # pure_text_of_hyperlink = (text_of_hyperlink and self.remove_punctuation(
+        #     text=text_of_hyperlink)) or ''
+        pure_text_of_hyperlink = text_of_hyperlink
         # text control if exist
         # if hyperlink_tag['href'] == "https://www.aa.com.tr/en/world/uk-us-announce-sanctions-to-disrupt-financial-networks-of-hamas/3115721":
         #     print("aaaa")
@@ -148,18 +152,37 @@ class UrlScraper:
             if len(pure_text_of_hyperlink.split()) > self.min_text_length: # alternatif olarak url-endpatinde keyword search yap.
                 if hyperlink_tag['href'] in self.rejected_urls: self.rejected_urls.remove(hyperlink_tag['href'])
                 return True
-            else:
-                # self.rejected_urls.add(hyperlink_tag)
-            #    if hyperlink_tag['href'] not in self.accepted_urls: self.rejected_urls.add(hyperlink_tag['href'])
 
-                # if hyperlink_tag['href'] in self.accepted_urls: self.accepted_urls.remove(hyperlink_tag['href'])
-                self.rejected_urls.add(hyperlink_tag['href'])
-                return False
+            # self.rejected_urls.add(hyperlink_tag)
+        #    if hyperlink_tag['href'] not in self.accepted_urls: self.rejected_urls.add(hyperlink_tag['href'])
+
+            # if hyperlink_tag['href'] in self.accepted_urls: self.accepted_urls.remove(hyperlink_tag['href'])
+            self.rejected_urls.add(hyperlink_tag['href'])
+            return False
         else:
             #if hyperlink_tag['href'] in self.rejected_urls: self.rejected_urls.remove(hyperlink_tag['href'])
-            return True
+            if hyperlink_tag['href'] == "https://www.instagram.com/p/C2XvKEtMtHp/":
+                print("heeeeeee")
+            if self.check_child_tags(hyperlink_tag=hyperlink_tag):
+                return True
+            return False
             # Child textine bak.
             ##return False #TODO: kaldır.
+
+    def check_child_tags(self, hyperlink_tag):
+        immediate_children = hyperlink_tag
+        for i in range(0, self.search_child_element_threshold):
+            try:
+                immediate_childrens = immediate_children.find_all(recursive=False)
+            except AttributeError as e:
+                return False
+            if not immediate_childrens: return False
+            for immediate_children in immediate_childrens:
+                text_of_child = immediate_children.text.strip()
+                if text_of_child and (len(text_of_child.split()) > self.min_text_length):
+                    return True
+                # return False
+        return False
 
     def url_formatter(self, article_url):
         if 'http' in article_url:
@@ -168,7 +191,7 @@ class UrlScraper:
             http_article_url = 'https://' + self.parsed_source_url['domain'] + article_url
             return http_article_url
 
-    def html_element_attribute_searching(self, html_tag, caller, hyperlink_tag=None):
+    def html_element_attribute_searching(self, html_tag, hyperlink_tag=None):
         hyperlink_tag = (hyperlink_tag and hyperlink_tag) or html_tag
         if html_tag.attrs:
             for attr_key, attr_value in html_tag.attrs.items():
@@ -219,7 +242,7 @@ class UrlScraper:
 
             if hyperlink_tag['href'] == "https://www.aa.com.tr/en/energy":
                 print("found url")
-            if self.html_element_attribute_searching(html_tag=hyperlink_tag, caller='hyperlink'):
+            if self.html_element_attribute_searching(html_tag=hyperlink_tag):
                 hyperlink_tag['href'] not in self.non_article_url_endpoints and self.accepted_urls.add(self.url_formatter(article_url=hyperlink_tag['href']))
                 #self.accepted_urls.add(hyperlink_tag['href'])
             if self.check_parent_tags(hyperlink_tag=hyperlink_tag):
@@ -234,15 +257,12 @@ class UrlScraper:
 
     def check_parent_tags(self, hyperlink_tag):
         # print("Searching parent elements on selected <a/> tag.")
-        html_element = hyperlink_tag
+        immediate_parent = hyperlink_tag
         for i in range(0, self.search_parent_element_threshold):
-            html_element = html_element.find_parent()
-            if self.html_element_attribute_searching(html_tag=html_element, hyperlink_tag=hyperlink_tag, caller='parent'):
+            immediate_parent = immediate_parent.find_parent()
+            if self.html_element_attribute_searching(html_tag=immediate_parent, hyperlink_tag=hyperlink_tag):
                 return True
         return False
-
-    def check_child_tags(self):
-        pass
 
     #TODO: self._url_list_by_article_tag kaldır
     def crawl_article_urls(self):
@@ -294,14 +314,16 @@ class UrlScraper:
             article_html_structure['element_order'] = element_order
             article_html_structure['hyperlink_tags'].append(hyper_link_tag)
             article_html_structure['urls'].append(hyper_link_tag['href'])
+
+            # controll hyperlink texts
             self.check_hyperlink_texts(hyperlink_tag=hyper_link_tag) and self.process_dicts(html_structural_patterns=html_structural_patterns, new_pattern=article_html_structure)
 
         # print(html_structural_patterns)
         print("\n**********************\n")
         max_voted_dict = max(html_structural_patterns, key=lambda x: x["vote"])
-        print(list(set(max_voted_dict['urls'])))
-        print(len(list(set(max_voted_dict['urls']))))
-        print((max_voted_dict['element_order']))
+        # print(list(set(max_voted_dict['urls'])))
+        # print(len(list(set(max_voted_dict['urls']))))
+        # print((max_voted_dict['element_order']))
         print("\n************\n")
         for i in html_structural_patterns:
             print(i['vote'])
@@ -319,11 +341,11 @@ class UrlScraper:
 
     def process_dicts(self, html_structural_patterns, new_pattern):
         for html_pattern in html_structural_patterns:
-            if html_pattern["element_order"] == new_pattern["element_order"] and new_pattern["element_order"] != ["link", "list", "list"]:
+            if html_pattern["element_order"] == new_pattern["element_order"]: # and new_pattern["element_order"] != ["link", "list", "list"]
                 html_pattern["vote"] += 1
                 html_pattern["hyperlink_tags"].append(new_pattern['hyperlink_tags'][0])
                 html_pattern["urls"].append(new_pattern['urls'][0])
-                break
+                return
         html_structural_patterns.append(new_pattern)
 
     def html_name_class_mapper(self, html_element_name):
@@ -342,6 +364,19 @@ class UrlScraper:
         for html_class, elements in html_classes.items():
             if html_element_name in elements: return html_class
         return "unknown"
+
+    #TODO: img ve figurelerde find_all yaparak hepsini sil.
+    def purify_redundant_html_parts(self):
+        soup = BeautifulSoup(self.html_content, 'html5lib')
+        for redundant_section in self.redundant_html_parts:
+            found_html_section = soup.find(redundant_section)
+            if found_html_section:
+                found_html_section.extract()
+
+        self.html_body = soup.find('body')
+        # print(self.html_body.prettify())
+        return soup
+
 
     def crawl_website(self, urls):
         for url in urls:
@@ -386,16 +421,42 @@ if __name__ == '__main__':
     #url = "https://www.voanews.com/a/ships-aircraft-search-for-missing-navy-seals-after-mission-to-seize-iranian-missile-parts/7440990.html" #done recall+
     # url = "https://www.defensenews.com/naval/" #done, recall+
     # url = "https://www.defensenews.com/"
-    url = "https://www.navaltoday.com/" #done, 44 recall+
-    # url = "https://www.miragenews.com/" #54 +
-    # url = "https://www.hurriyetdailynews.com/" #69 +
-    # url = "https://www.al-monitor.com/" #59 ++
+    # url = "https://www.navaltoday.com/" #done, 44 recall+
+    # url = "https://www.miragenews.com/" #54 Select Top 3 Vote +++
+
+    # url = "https://www.al-monitor.com/" # 31 stv3++
     # url = "https://www.shephardmedia.com/news/naval-warfare/turkish-navy-looks-to-advance-maritime-power-with-2024-fleet-expansion/" #6 news 18 found ++
     # url = "https://www.shephardmedia.com/" #3 news 9 found ++
-    #url = "https://www.aa.com.tr/en/turkiye/turkiye-hosting-eastern-mediterranean-2023-invitation-naval-exercise/3058764" # news url-indicator dan çıkarıldı
 
+    #url = "https://www.defenseone.com/"
+    # url = "https://www.alhurra.com/" # st3v +++
 
+    # tr news
+    # url = "https://www.hurriyetdailynews.com/"  # 69 + st3v +++
+    # url = "https://www.aa.com.tr/en/turkiye/turkiye-hosting-eastern-mediterranean-2023-invitation-naval-exercise/3058764"  # news url-indicator dan çıkarıldı
 
+    # gr news
+    # url = "https://www.naftikachronika.gr/" #st3v +++
+    # url = "https://e-nautilia.gr/" #st3v +++
+    # url = "https://www.naftikachronika.gr/latest/" #stv3 +++
+    # url = "https://www.naftemporiki.gr/maritime/" #st3v +++
+    # url = "https://www.isalos.net/" #st3v +++
+    # url = "https://www.capital.gr/tag/nautilia/" #st3v +++
+    # url = "https://www.maritimes.gr/el/"
+    # url = "https://www.pno.gr/"
+    # url = "https://tralaw.gr/category/nautika-nea/"
+    # url = "https://www.tanea.gr/tag/%CE%BD%CE%B1%CF%85%CF%84%CE%B9%CE%BA%CE%BF%CE%AF/"
+    # url = "https://www.alithia.gr/eidiseis" #st3v +++
+    # url = "https://hellenicnavy.gr/" #st3v +++ 1+2=35 no-punc ++
+    # url = "https://www.onalert.gr/" #st3v +++ no-punc ++
+
+#TODO ***:
+# url filter ( #, /, etc.) or
+# add domain prefix
+# en çok olanı al
+# 2 ve 3. en çok vote alana class search uygula geçenleri al.
+# discard vote < 3
+# url kontrolü yap
 
 
 
