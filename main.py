@@ -13,24 +13,38 @@ from selenium.webdriver.common.by import By
 from xml.etree import ElementTree as ET
 
 class UrlScraper:
-    def __init__(self, source_url, ):
-        self.source_url = source_url
+    def __init__(self):
+        #self.source_url = source_url
+        self.driver = None
+        self.html_body = None
+        self.html_content = None
+        self.parsed_source_url = None
+        self.soup_obj = None
+        self.anchor_tags = None
+        self.non_article_url_endpoints = None
         self.selenium_wait_timeout = 10
         self.search_parent_element_threshold = 3
         self.search_child_element_threshold = 3
         self.min_text_length = 3
         self.url_indicator_list = ["news", "content", "title", "post", "article", "story"]  # , "headline", "heading", "text"
         self.non_url_indicator_list = ["privacy", "policy", "cookie", "pay", "ad", "advertise"]
-        self.non_article_url_endpoints = ["#", "/", "privacy-policy/"]
         self.redundant_html_parts = ["header", "footer", "head", "img", "figure"]
-        self.html_body = None
-        self.html_content = self.get_html_with_selenium(url_=self.source_url)
-        self.soup_obj = self.purify_redundant_html_parts()
-        self.anchor_tags = self.soup_obj.find_all('a')
-        self.parsed_source_url = self.parse_url(news_url=self.source_url)
-        self.extend_non_article_url_endpoints(urls=self.non_article_url_endpoints.copy())
         self.rejected_urls = set()
         self.accepted_urls = set()
+        self._url_list_by_article_tag = []
+        self._url_list_a_tag_attributes = []
+        self.__build()
+
+    def __build(self):
+        self.driver = self.__build_driver()
+
+    def __build_html(self, source_url):
+        self.html_content = self.get_html_with_selenium(source_url=source_url)  # dependent on self.driver
+        self.soup_obj = self.purify_redundant_html_parts()  # self.html_content
+        self.anchor_tags = self.soup_obj.find_all('a')  # independent
+        self.non_article_url_endpoints = ["#", "/", "privacy-policy/"]
+        self.parsed_source_url = self.parse_url(news_url=source_url)
+        self.extend_non_article_url_endpoints(urls=self.non_article_url_endpoints.copy())
         self._url_list_by_article_tag = []
         self._url_list_a_tag_attributes = []
 
@@ -55,27 +69,28 @@ class UrlScraper:
         domain and self.non_article_url_endpoints.append(domain)
         return {"domain": domain, "endpoint": endpoint}
 
-    def get_html_with_selenium(self, url_):
+    def __build_driver(self):
+        chrome_options = webdriver.ChromeOptions()
+        chrome_options.add_experimental_option("detach", True)
+        chrome_options.add_argument("--start-maximized")
+        # chrome_options.add_argument('--headless')
+        driver = webdriver.Chrome(options=chrome_options)
+        return driver
+
+    def get_html_with_selenium(self, source_url):
         try:
-            # Specify the path to your ChromeDriver executable
-            chrome_options = webdriver.ChromeOptions()
-            chrome_options.add_experimental_option("detach", True)
-            chrome_options.add_argument("--start-maximized")
-            chrome_options.add_argument('--headless')
-            driver = webdriver.Chrome(options=chrome_options)
+
             #driver.get("https://stackoverflow.com/questions/28431765/open-web-in-new-tab-selenium-python")
 
             # print(self.selenium_wait_timeout)
             # driver.switch_to.new_window() #new-tab options
-            driver.get(url_) #new-tab options
-
-
-            WebDriverWait(driver, self.selenium_wait_timeout).until(EC.presence_of_element_located((By.TAG_NAME, 'a')))
+            self.driver.get(source_url) #new-tab options
+            WebDriverWait(self.driver, self.selenium_wait_timeout).until(EC.presence_of_element_located((By.TAG_NAME, 'a')))
             # driver.window_handles[1]
             # driver.close() #new-tab options
             # time.sleep(3) #new-tab options
-            html_code = driver.page_source
-            driver.quit()
+            html_code = self.driver.page_source
+            #driver.quit()
 
             return html_code
         except Exception as e:
@@ -328,7 +343,8 @@ class UrlScraper:
         for i in html_structural_patterns:
             print(i['vote'])
             print(i['element_order'])
-            print(i['urls'])
+            print(set(i['urls']))
+            print(len(set(i['urls'])))
             print("\n*****\n")
 
 
@@ -377,10 +393,10 @@ class UrlScraper:
         # print(self.html_body.prettify())
         return soup
 
+    def unknown_main(self, source_url):
+        self.__build_html(source_url=source_url)
+        self.html_structural_pattern_search()
 
-    def crawl_website(self, urls):
-        for url in urls:
-            response = requests.get(url)
 
 
 
@@ -415,7 +431,7 @@ if __name__ == '__main__':
     url = "https://www.centcom.mil/MEDIA/NEWS-ARTICLES/" #done +
     url = "https://www.centcom.mil/" #done recall oriented. +
     url = "https://www.dailysabah.com/war-on-terror" # sıkıntı, # ve cookies urllerini discard et.
-    url = "https://www.military.com/navy" #done, head çıkarıldı
+    url2 = "https://www.military.com/navy" #done, head çıkarıldı #35
     #url = "https://www.businessinsider.com/news" #done, 65 ++
     # url = "https://indianexpress.com/"#done recall+
     #url = "https://www.voanews.com/a/ships-aircraft-search-for-missing-navy-seals-after-mission-to-seize-iranian-missile-parts/7440990.html" #done recall+
@@ -447,22 +463,24 @@ if __name__ == '__main__':
     # url = "https://tralaw.gr/category/nautika-nea/"
     # url = "https://www.tanea.gr/tag/%CE%BD%CE%B1%CF%85%CF%84%CE%B9%CE%BA%CE%BF%CE%AF/"
     # url = "https://www.alithia.gr/eidiseis" #st3v +++
-    # url = "https://hellenicnavy.gr/" #st3v +++ 1+2=35 no-punc ++
+    url = "https://hellenicnavy.gr/" #st3v +++ 1+2=35 no-punc ++
     # url = "https://www.onalert.gr/" #st3v +++ no-punc ++
 
 #TODO ***:
-# url filter ( #, /, etc.) or
+# url filter ( #, /, etc.) or privacy-policy
 # add domain prefix
 # en çok olanı al
 # 2 ve 3. en çok vote alana class search uygula geçenleri al.
 # discard vote < 3
 # url kontrolü yap
+# parent element check yaparak elementin attributelarını kontrol et ve cookie ve privacy policy elemesi yap (cookie, privacy policy, privacy-policy)
 
 
 
-    url_scraper_obj = UrlScraper(source_url=url)
+    url_scraper_obj = UrlScraper()
     # url_scraper_obj.crawler_build()
-    url_scraper_obj.html_structural_pattern_search()
+    url_scraper_obj.unknown_main(source_url=url)
+    # url_scraper_obj.unknown_main(source_url=url2)
     # print(url_scraper_obj._url_list_by_article_tag)
     # print(len(url_scraper_obj._url_list_by_article_tag))
     # print(url_scraper_obj._url_list_a_tag_attributes)
@@ -470,10 +488,6 @@ if __name__ == '__main__':
     # sitemap_url = "https://www.eurasiantimes.com/sitemap.xml"
     # urls = url_scraper_obj.get_sitemap_urls(sitemap_url)
     # print(urls)
-    print(url_scraper_obj.rejected_urls)
-    print("accepted urls:")
-    print(url_scraper_obj.accepted_urls)
-    print(len(url_scraper_obj.accepted_urls))
 
 
 
